@@ -215,6 +215,16 @@ Gemeinsam:
 
 # Literatur
 
-- Dai et al. (2022): *Promptagator: Few-shot Dense Retrieval from 8 Examples*
-- Thakur et al. (2024): *SWIM-IR: Leveraging LLMs for Synthesizing Training Data Across Many Languages in Multilingual Dense Retrieval*
-- Deutsches Textarchiv (DTA)
+## Textnormalisierung
+
+- Ehrmanntraut, A. (2025). *Historical German Text Normalization Using Type- and Token-Based Language Modeling.*
+- Bollmann, M. (2012). *(Semi-)Automatic Normalization of Historical Texts using Distance Measures and the Norma Tool.*
+
+## Anfragegenerierung
+
+- Dai, Z., et al. (2022). *Promptagator: Few-shot Dense Retrieval from 8 Examples.*
+- Thakur, N., et al. (2024). *SWIM-IR: Leveraging LLMs for Synthesizing Training Data Across Many Languages in Multilingual Dense Retrieval.*
+
+## Datengrundlage
+
+- Deutsches Textarchiv (DTA). https://www.deutschestextarchiv.de/
