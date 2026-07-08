@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import spacy
 import torch
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
@@ -10,71 +11,85 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 INPUT_DIR = PROJECT_ROOT / "data" / "original"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "normalized_transnormer"
 
+# Zum Testen: 100
+# Für vollständige Normalisierung: None
+TEST_LIMIT = 100
+
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def simple_sentence_split(text: str) -> list[str]:
+def sentence_split(text: str) -> list[str]:
+    """
+    Sentence segmentation with spaCy sentencizer.
+    This is more stable than splitting only by punctuation.
+    """
+    nlp = spacy.blank("de")
+    nlp.add_pipe("sentencizer")
+
+    # Increase max_length for long historical texts
+    nlp.max_length = len(text) + 100
+
     text = text.replace("\r\n", "\n").replace("\r", "\n")
-    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    doc = nlp(text)
 
-    sentences = []
-    for line in lines:
-        parts = line.replace(". ", ".\n").replace("? ", "?\n").replace("! ", "!\n").split("\n")
-        sentences.extend(part.strip() for part in parts if part.strip())
-
+    sentences = [sent.text.strip() for sent in doc.sents if sent.text.strip()]
     return sentences
 
 
-def normalize_text(text: str, tokenizer, model) -> str:
-    sentences = simple_sentence_split(text)
-    normalized_sentences = []
-    sentences = sentences[:100]
+def normalize_sentence(sentence: str, tokenizer, model) -> str:
+    inputs = tokenizer(
+        sentence,
+        return_tensors="pt",
+        truncation=True,
+        max_length=512,
+    )
 
-    for i, sentence in enumerate(sentences, start=1):
-        print(f"  Sentence {i}/{len(sentences)}")
-
-        inputs = tokenizer(
-            sentence,
-            return_tensors="pt",
-            truncation=True,
-            max_length=512,
+    with torch.no_grad():
+        outputs = model.generate(
+            **inputs,
+            num_beams=4,
+            max_new_tokens=512,
         )
 
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                num_beams=4,
-                max_new_tokens=512,
-            )
+    return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-        normalized = tokenizer.decode(outputs[0], skip_special_tokens=True)
-        normalized_sentences.append(normalized)
 
-    return "\n".join(normalized_sentences)
+def normalize_file(input_path: Path, output_path: Path, tokenizer, model) -> None:
+    text = input_path.read_text(encoding="utf-8")
+    sentences = sentence_split(text)
+
+    if TEST_LIMIT is not None:
+        sentences = sentences[:TEST_LIMIT]
+
+    print(f"  Segments: {len(sentences)}")
+
+    normalized_sentences = []
+
+    for i, sentence in enumerate(sentences, start=1):
+        print(f"  Segment {i}/{len(sentences)}")
+        normalized_sentences.append(normalize_sentence(sentence, tokenizer, model))
+
+    normalized_text = "\n".join(normalized_sentences)
+    output_path.write_text(normalized_text, encoding="utf-8")
 
 
 def main() -> None:
     files = [INPUT_DIR / "chladni_geschichtswissenschaft_1752.txt"]
-
-    if not files:
-        print(f"No .txt files found in: {INPUT_DIR}")
-        return
 
     print(f"Loading model: {MODEL_NAME}")
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME)
     model.eval()
 
-    print(f"Found {len(files)} files.")
-
     for file_path in files:
+        if not file_path.exists():
+            print(f"File not found: {file_path}")
+            continue
+
         print(f"\nNormalizing file: {file_path.name}")
 
-        text = file_path.read_text(encoding="utf-8")
-        normalized_text = normalize_text(text, tokenizer, model)
-
         output_path = OUTPUT_DIR / file_path.name.replace(".txt", "_norm.txt")
-        output_path.write_text(normalized_text, encoding="utf-8")
+        normalize_file(file_path, output_path, tokenizer, model)
 
         print(f"Saved: {output_path}")
 
